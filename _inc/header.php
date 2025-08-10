@@ -1,5 +1,5 @@
 <?php
-// _inc/header.php — CSS-only hamburger (gold), mobile-first & robust
+// _inc/header.php — CSS-only hamburger; SorceryNet banner + "#IdleRPG @ irc.sorcery.net" brand text
 
 if (!headers_sent()) {
   header('Referrer-Policy: no-referrer');
@@ -23,9 +23,8 @@ if (substr($BASEURL, -1) !== '/') $BASEURL .= '/';
 $IMG_URL = $BASEURL . 'assets/img/';
 $CSS_URL = $BASEURL . 'assets/css/';
 
-/* Logo path (from config if set) */
-$logoFile = isset($irpg_logo) && $irpg_logo !== '' ? basename($irpg_logo) : 'idlerpg.png';
-$IRPG_LOGO_URL = $IMG_URL . $logoFile;
+/* Force SorceryNet banner logo */
+$IRPG_LOGO_URL = $IMG_URL . 'BannerLogo.png';
 
 /* Nav items (DB last) */
 $nav = [
@@ -82,11 +81,11 @@ $nav = [
 <body>
 <header class="site-header">
   <a href="<?php echo $BASEURL; ?>" class="brand" style="display:flex;align-items:center;gap:.6rem;text-decoration:none;">
-    <img src="<?php echo $IRPG_LOGO_URL; ?>" class="logo-banner" alt="IdleRPG">
-    <strong style="color:#fff"><?php echo htmlspecialchars($SITE_TITLE, ENT_QUOTES, 'UTF-8'); ?></strong>
+    <img src="<?php echo $IRPG_LOGO_URL; ?>" class="logo-banner" alt="SorceryNet">
+    <strong style="color:#fff">#IdleRPG @ irc.sorcery.net</strong>
   </a>
 
-  <nav class="primary-nav" aria-label="Primary">
+  <nav class="primary-nav" aria-label="Primary" style="display:flex;align-items:center;gap:.5rem;">
     <!-- Hidden checkbox drives the toggle; label is the gold hamburger -->
     <input type="checkbox" id="navToggle" class="nav-toggle-input" aria-hidden="true">
     <label for="navToggle" class="nav-toggle" id="navButton" aria-controls="navMenu" aria-expanded="false" aria-label="Toggle menu">
