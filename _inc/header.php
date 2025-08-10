@@ -1,6 +1,5 @@
 <?php
-// _inc/header.php — CSS-only hamburger; SorceryNet banner + "#IdleRPG @ irc.sorcery.net" brand text
-
+// _inc/header.php — SorceryNet banner links to main site; Home -> sorcery.net; Game Info -> /idlerpg/index.php
 if (!headers_sent()) {
   header('Referrer-Policy: no-referrer');
   header('X-Content-Type-Options: nosniff');
@@ -26,14 +25,15 @@ $CSS_URL = $BASEURL . 'assets/css/';
 /* Force SorceryNet banner logo */
 $IRPG_LOGO_URL = $IMG_URL . 'BannerLogo.png';
 
-/* Nav items (DB last) */
+/* Nav: Home -> main site; Game Info -> /idlerpg/index.php (keep key 'home' so index highlights correctly) */
 $nav = [
-  ['href' => $BASEURL.'index.php',    'key' => 'home',    'label' => 'Home'],
-  ['href' => $BASEURL.'players.php',  'key' => 'players', 'label' => 'Players'],
-  ['href' => $BASEURL.'quests.php',   'key' => 'quests',  'label' => 'Quests'],
-  ['href' => $BASEURL.'items.php',    'key' => 'items',   'label' => 'Items'],
-  ['href' => $BASEURL.'worldmap.php', 'key' => 'map',     'label' => 'Map'],
-  ['href' => $BASEURL.'db.php',       'key' => 'db',      'label' => 'DB View'],
+  ['href' => 'https://sorcery.net',     'key' => 'home-site', 'label' => 'Home'],
+  ['href' => $BASEURL.'index.php',      'key' => 'home',      'label' => 'Game Info'],
+  ['href' => $BASEURL.'players.php',    'key' => 'players',   'label' => 'Players'],
+  ['href' => $BASEURL.'quests.php',     'key' => 'quests',    'label' => 'Quests'],
+  ['href' => $BASEURL.'items.php',      'key' => 'items',     'label' => 'Items'],
+  ['href' => $BASEURL.'worldmap.php',   'key' => 'map',       'label' => 'Map'],
+  ['href' => $BASEURL.'db.php',         'key' => 'db',        'label' => 'DB View'],
 ];
 ?>
 <!doctype html>
@@ -80,7 +80,8 @@ $nav = [
 </head>
 <body>
 <header class="site-header">
-  <a href="<?php echo $BASEURL; ?>" class="brand" style="display:flex;align-items:center;gap:.6rem;text-decoration:none;">
+  <!-- Brand: SorceryNet banner links to main site -->
+  <a href="https://sorcery.net" class="brand" style="display:flex;align-items:center;gap:.6rem;text-decoration:none;">
     <img src="<?php echo $IRPG_LOGO_URL; ?>" class="logo-banner" alt="SorceryNet">
     <strong style="color:#fff">#IdleRPG @ irc.sorcery.net</strong>
   </a>
