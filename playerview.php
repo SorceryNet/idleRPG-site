@@ -1,156 +1,260 @@
 <?php
-    include("config.php");
+// playerview.php — modernised, preserves legacy behaviour
+require_once __DIR__.'/_inc/config.php';
+require_once __DIR__.'/_inc/functions.php';  // e(), helpers
 
-    $_GET['player'] = substr($_GET['player'],0,30);
+// --- Input sanitisation ----------------------------------------------------
+$player = isset($_GET['player']) ? substr((string)$_GET['player'], 0, 30) : '';
+$showmap = isset($_GET['showmap']) ? (int)$_GET['showmap'] : 0;
+$allmods = isset($_GET['allmods']) ? (int)$_GET['allmods'] : 0;
 
-    /* Determine if a Player was entered. If not, redirect. */
-    if ($_GET['player']=="") header('Location: http://'.$_SERVER['SERVER_NAME'].
-        ($_SERVER['SERVER_PORT']!=80?':'.$_SERVER['SERVER_PORT']:'').$BASEURL.
-        'players.php');
-    
-    $irpg_page_title = "Player Info: " . htmlentities($_GET['player']);
-    $showmap = $_GET['showmap'];
-    
-    include("header.php");
-    include("commonfunctions.php");
-    echo "<h1>Player Info</h1>";
-    $file = fopen($irpg_db,"r");
-    fgets($file,1024); // skip top comment
-    $found=0;
-    while ($line=fgets($file,1024)) {
-        if (substr($line,0,strlen($_GET['player'])+1) == $_GET['player']."\t") {
-            list($user,,$isadmin,$level,$class,$secs,,$uhost,$online,$idled,
-                 $x,$y,
-                 $pen['mesg'],
-                 $pen['nick'],
-                 $pen['part'],
-                 $pen['kick'],
-                 $pen['quit'],
-                 $pen['quest'],
-                 $pen['logout'],
-                 $created,
-                 $lastlogin,
-                 $item['amulet'],
-                 $item['charm'],
-                 $item['helm'],
-                 $item['boots'],
-                 $item['gloves'],
-                 $item['ring'],
-                 $item['leggings'],
-                 $item['shield'],
-                 $item['tunic'],
-                 $item['weapon'],
-                 $alignment,
-            ) = explode("\t",trim($line));
-            $found=1;
-            break;
-        }
+// Redirect if no player
+if ($player === '') {
+  $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https://' : 'http://';
+  $host   = $_SERVER['HTTP_HOST'] ?? $_SERVER['SERVER_NAME'];
+  header('Location: '.$scheme.$host.$BASEURL.'players.php');
+  exit;
+}
+
+$irpg_page_title = "Player Info: " . $player;
+$active = 'players';
+include __DIR__.'/_inc/header.php';
+
+// --- Load player record ----------------------------------------------------
+$found    = false;
+$record   = null;
+$pen      = [];  // penalties
+$item     = [];  // items
+$err      = null;
+
+if (!is_readable($irpg_db)) {
+  $err = "Character database not readable: ".$irpg_db;
+} else {
+  $fh = fopen($irpg_db, "r");
+  if ($fh === false) {
+    $err = "Unable to open character database.";
+  } else {
+    fgets($fh, 1024); // skip header/comment line
+    while (($line = fgets($fh, 8192)) !== false) {
+      // Fast check: line starts with "player\t"
+      if (strncmp($line, $player."\t", strlen($player)+1) === 0) {
+        $parts = explode("\t", trim($line));
+        // Keep original field mapping exactly as before
+        // list indices for readability
+        $idx = 0;
+        $user     = $parts[$idx++] ?? '';           // 0
+        $idx++;                                     // 1 (unused)
+        $isadmin  = (int)($parts[$idx++] ?? 0);     // 2
+        $level    = (int)($parts[$idx++] ?? 0);     // 3
+        $class    = $parts[$idx++] ?? '';           // 4
+        $secs     = (int)($parts[$idx++] ?? 0);     // 5
+        $idx++;                                     // 6 (unused)
+        $uhost    = $parts[$idx++] ?? '';           // 7
+        $online   = !empty($parts[$idx++] ?? '');   // 8
+        $idled    = (int)($parts[$idx++] ?? 0);     // 9
+        $x        = $parts[$idx++] ?? '';           // 10
+        $y        = $parts[$idx++] ?? '';           // 11
+
+        // penalties
+        $pen['mesg']   = (int)($parts[$idx++] ?? 0);  // 12
+        $pen['nick']   = (int)($parts[$idx++] ?? 0);  // 13
+        $pen['part']   = (int)($parts[$idx++] ?? 0);  // 14
+        $pen['kick']   = (int)($parts[$idx++] ?? 0);  // 15
+        $pen['quit']   = (int)($parts[$idx++] ?? 0);  // 16
+        $pen['quest']  = (int)($parts[$idx++] ?? 0);  // 17
+        $pen['logout'] = (int)($parts[$idx++] ?? 0);  // 18
+
+        // timestamps
+        $created   = (int)($parts[$idx++] ?? 0);      // 19
+        $lastlogin = (int)($parts[$idx++] ?? 0);      // 20
+
+        // items
+        $item['amulet']   = $parts[$idx++] ?? '';     // 21
+        $item['charm']    = $parts[$idx++] ?? '';     // 22
+        $item['helm']     = $parts[$idx++] ?? '';     // 23
+        $item['boots']    = $parts[$idx++] ?? '';     // 24
+        $item['gloves']   = $parts[$idx++] ?? '';     // 25
+        $item['ring']     = $parts[$idx++] ?? '';     // 26
+        $item['leggings'] = $parts[$idx++] ?? '';     // 27
+        $item['shield']   = $parts[$idx++] ?? '';     // 28
+        $item['tunic']    = $parts[$idx++] ?? '';     // 29
+        $item['weapon']   = $parts[$idx++] ?? '';     // 30
+
+        $alignment = $parts[$idx++] ?? '';           // 31
+
+        $record = compact(
+          'user','isadmin','level','class','secs','uhost','online','idled','x','y',
+          'created','lastlogin','alignment'
+        );
+        $found = true;
+        break;
+      }
     }
-    if (!$found) echo "<h1>Error</h1><p><b>No such user.</b></p>\n";
-    else {
-        $class=htmlentities($class);
-        /* if we htmlentities($user), then we cannot use links with it. */
-        echo "      <p><b>User:</b> ".htmlentities($user)."<br />\n".
-             "      <b>Class:</b> $class<br />\n".
-             "      <b>Admin?:</b> ".($isadmin?"Yes":"No")."<br />\n".
-             "      <b>Level:</b> $level<br />\n".
-             "      <b>Next level:</b> ".duration($secs)."<br />\n".
-             "      <b>Status:</b> O".($online?"n":"ff")."line<br />\n".
-             "      <b>Host:</b> ".($uhost?$uhost:"Unknown")."<br />\n".
-             "      <b>Account Created:</b> ".date("D M j H:i:s Y",$created)."<br />\n".
-             "      <b>Last login:</b> ".date("D M j H:i:s Y",$lastlogin)."<br />\n".
-             "      <b>Total time idled:</b> ".duration($idled)."<br />\n".
-             "      <b>Current position:</b> [$x,$y]<br />\n".
-             "      <b>Alignment:</b> ".($alignment=='e'?"Evil":($alignment=='n'?"Neutral":"Good"))."<br />\n".
-             "      <b>XML:</b> [<a href=\"xml.php?player=".urlencode($user)."\">link</a>]</p>\n".
-             "    <h2>Map</h2>\n".
-             "    ".($showmap?"<div id=\"map\"><img src=\"makemap.php?player=".urlencode($user)."\"></div>\n\n":"<p><a href=\"?player=".urlencode($user)."&showmap=1\">Show map</a></p>\n\n")."".
-             "    <h2>Items</h2>\n<p>";
-        ksort($item);
-        $sum = 0;
-        foreach ($item as $key => $val) {
-            $uniquecolor="#be9256";
-            if ($key == "helm" && substr($val,-1,1) == "a") {
-                $val = intval($val)." [<font color=\"$uniquecolor\">Mattt's Omniscience Grand Crown</font>]";
-            }
-            if ($key == "tunic" && substr($val,-1,1) == "b") {
-                $val = intval($val)." [<font color=\"$uniquecolor\">Res0's Protectorate Plate Mail</font>]";
-            }
-            if ($key == "amulet" && substr($val,-1,1) == "c") {
-                $val = intval($val)." [<font color=\"$uniquecolor\">Dwyn's Storm Magic Amulet</font>]";
-            }
-            if ($key == "weapon" && substr($val,-1,1) == "d") {
-                $val = intval($val)." [<font color=\"$uniquecolor\">Jotun's Fury Colossal Sword</font>]";
-            }
-            if ($key == "weapon" && substr($val,-1,1) == "e") {
-                $val = intval($val)." [<font color=\"$uniquecolor\">Drdink's Cane of Blind Rage</font>]";
-            }
-            if ($key == "boots" && substr($val,-1,1) == "f") {
-                $val = intval($val)." [<font color=\"$uniquecolor\">Mrquick's Magical Boots of Swiftness</font>]";
-            }
-            if ($key == "weapon" && substr($val,-1,1) == "g") {
-                $val = intval($val)." [<font color=\"$uniquecolor\">Jeff's Cluehammer of Doom</font>]";
-            }
-            if ($key == "ring" && substr($val,-1,1) == "h") {
-                $val = intval($val)." [<font color=\"$uniquecolor\">Juliet's Glorious Ring of Sparkliness</font>]";
-            }
-            echo "      $key: $val<br />\n";
-            $sum += $val;
-        }
-        echo "      <br />\n      sum: $sum<br />\n".
-             "    </p>".
-             "    <h2>Penalties</h2>\n".
-             "    <p>\n";
-
-        ksort($pen);
-        $sum = 0;
-        foreach ($pen as $key => $val) {
-            echo "      $key: ".duration($val)."<br />\n";
-            $sum += $val;
-        }
-        echo "      <br />\n      total: ".duration($sum)."</p>\n";
-
-        $file = fopen($irpg_mod,"r");
-        $temp = array();
-        while ($line=fgets($file,1024)) {
-            if (strstr($line," ".$_GET['player']." ")          ||
-                strstr($line," ".$_GET['player'].", ")         ||
-                substr($line,0,strlen($_GET['player'])+1) ==
-                       $_GET['player']." "                        ||
-                substr($line,0,strlen($_GET['player'])+3) ==
-                       $_GET['player']."'s ") {
-                array_push($temp,$line);
-            }
-        }
-        fclose($file);
-        if (!is_null($temp) && count($temp)) {
-            echo('<h2>');
-            echo $_GET['allmods']!=1?"Recent ":"";
-            echo('Character Modifiers</h2><p>');
-            if ($_GET['allmods'] == 1 || count($temp) < 6) {
-                foreach ($temp as $line) {
-                    $line=htmlentities(trim($line));
-                    echo "      $line<br />\n";
-                }
-                echo "      <br />\n";
-            }
-            else {
-                end($temp);
-                for ($i=0;$i<4;++$i) prev($temp);
-                for ($line=trim(current($temp));$line;$line=trim(next($temp))) {
-                    $line=htmlentities(trim($line));
-                    echo "      $line<br />\n";
-                }
-            }
-        }
-        if ($_GET['allmods'] != 1 && count($temp) > 5) {
+    fclose($fh);
+  }
+}
 ?>
-      <br />
-      [<a href="<?php echo $_SERVER['PHP_SELF']."?player=".urlencode($user);?>&amp;allmods=1">View all Character Modifiers</a> (<?=count($temp)?>)]
+
+<section class="card">
+  <h1>Player Info</h1>
+  <?php if ($err): ?>
+    <p class="text-muted"><?php echo e($err); ?></p>
+  <?php elseif (!$found || !$record): ?>
+    <h2>Error</h2>
+    <p><strong>No such user.</strong></p>
+  <?php else: ?>
+    <?php
+      $classSafe  = htmlentities($record['class'], ENT_QUOTES, 'UTF-8');
+      $alignLabel = ($record['alignment']==='e' ? 'Evil' : ($record['alignment']==='n' ? 'Neutral' : 'Good'));
+      $eta        = function_exists('duration') ? duration((int)$record['secs']) : ((int)$record['secs'].'s');
+      $statusText = $record['online'] ? 'Online' : 'Offline';
+      $hostText   = $record['uhost'] ? $record['uhost'] : 'Unknown';
+      $createdAt  = $record['created'] ? date("D M j H:i:s Y", (int)$record['created']) : '—';
+      $lastLogin  = $record['lastlogin'] ? date("D M j H:i:s Y", (int)$record['lastlogin']) : '—';
+      $xmlUrl     = $BASEURL.'xml.php?player='.urlencode($record['user']);
+      $mapUrl     = $BASEURL.'makemap.php?player='.urlencode($record['user']);
+      $selfUrl    = $BASEURL.'playerview.php?player='.urlencode($record['user']);
+    ?>
+
+    <div class="table-wrapper">
+      <table class="table">
+        <tbody>
+          <tr><th>User</th><td><?php echo e($record['user']); ?></td></tr>
+          <tr><th>Class</th><td><?php echo $classSafe; ?></td></tr>
+          <tr><th>Admin?</th><td><?php echo $record['isadmin'] ? 'Yes' : 'No'; ?></td></tr>
+          <tr><th>Level</th><td><?php echo (int)$record['level']; ?></td></tr>
+          <tr><th>Next level</th><td><?php echo e($eta); ?></td></tr>
+          <tr><th>Status</th><td><?php echo $record['online'] ? 'Online' : '<span class="text-muted">Offline</span>'; ?></td></tr>
+          <tr><th>Host</th><td><?php echo e($hostText); ?></td></tr>
+          <tr><th>Account Created</th><td><?php echo e($createdAt); ?></td></tr>
+          <tr><th>Last login</th><td><?php echo e($lastLogin); ?></td></tr>
+          <tr><th>Total time idled</th><td><?php echo function_exists('duration') ? e(duration((int)$record['idled'])) : e($record['idled'].'s'); ?></td></tr>
+          <tr><th>Current position</th><td>[<?php echo e($record['x']); ?>,<?php echo e($record['y']); ?>]</td></tr>
+          <tr><th>Alignment</th><td><?php echo e($alignLabel); ?></td></tr>
+          <tr><th>XML</th><td>[<a href="<?php echo $xmlUrl; ?>">link</a>]</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h2>Map</h2>
+    <?php if ($showmap): ?>
+      <div id="map" class="mt-1">
+        <img src="<?php echo $mapUrl; ?>" alt="Player location map for <?php echo e($record['user']); ?>" style="max-width:100%;height:auto;border:1px solid var(--border);border-radius:10px;box-shadow:var(--shadow);" />
+      </div>
+      <p class="mt-1"><a href="<?php echo $selfUrl; ?>">Hide map</a></p>
+    <?php else: ?>
+      <p><a href="<?php echo $selfUrl; ?>&amp;showmap=1">Show map</a></p>
+    <?php endif; ?>
+
+    <h2>Items</h2>
+    <div class="table-wrapper">
+      <table class="table">
+        <thead><tr><th>Slot</th><th>Value</th></tr></thead>
+        <tbody>
+          <?php
+            ksort($item);
+            $sumItems = 0;
+            foreach ($item as $slot => $valRaw) {
+              $val = $valRaw;
+              $badge = '';
+
+              // Unique item detection (same rules you had, with nicer markup)
+              $uniquecolor = 'var(--brand-gold)';
+
+              if ($slot === 'helm'    && substr($val, -1) === 'a') { $badge = "Mattt's Omniscience Grand Crown";   $val = (int)$val; }
+              if ($slot === 'tunic'   && substr($val, -1) === 'b') { $badge = "Res0's Protectorate Plate Mail";     $val = (int)$val; }
+              if ($slot === 'amulet'  && substr($val, -1) === 'c') { $badge = "Dwyn's Storm Magic Amulet";          $val = (int)$val; }
+              if ($slot === 'weapon'  && substr($val, -1) === 'd') { $badge = "Jotun's Fury Colossal Sword";        $val = (int)$val; }
+              if ($slot === 'weapon'  && substr($val, -1) === 'e') { $badge = "Drdink's Cane of Blind Rage";        $val = (int)$val; }
+              if ($slot === 'boots'   && substr($val, -1) === 'f') { $badge = "Mrquick's Magical Boots of Swiftness"; $val = (int)$val; }
+              if ($slot === 'weapon'  && substr($val, -1) === 'g') { $badge = "Jeff's Cluehammer of Doom";          $val = (int)$val; }
+              if ($slot === 'ring'    && substr($val, -1) === 'h') { $badge = "Juliet's Glorious Ring of Sparkliness"; $val = (int)$val; }
+
+              $sumItems += (int)$val;
+              ?>
+              <tr>
+                <td><?php echo e($slot); ?></td>
+                <td>
+                  <?php echo e((string)$val); ?>
+                  <?php if ($badge): ?>
+                    <span class="badge gold" title="Unique item" style="margin-left:.5rem;"><?php echo e($badge); ?></span>
+                  <?php endif; ?>
+                </td>
+              </tr>
+            <?php } ?>
+          <tr>
+            <th>sum</th>
+            <th><?php echo (int)$sumItems; ?></th>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h2>Penalties</h2>
+    <div class="table-wrapper">
+      <table class="table">
+        <thead><tr><th>Type</th><th>Time</th></tr></thead>
+        <tbody>
+          <?php
+            ksort($pen);
+            $sumPen = 0;
+            foreach ($pen as $key => $val) {
+              $sumPen += (int)$val;
+              echo '<tr><td>'.e($key).'</td><td>'.e(function_exists('duration') ? duration((int)$val) : ($val.'s')).'</td></tr>';
+            }
+          ?>
+          <tr>
+            <th>total</th>
+            <th><?php echo e(function_exists('duration') ? duration($sumPen) : ($sumPen.'s')); ?></th>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <?php
+      // Character modifiers from modifiers.txt (legacy behaviour)
+      $mods = [];
+      if (is_readable($irpg_mod) && ($mf = fopen($irpg_mod, 'r'))) {
+        while (($ln = fgets($mf, 4096)) !== false) {
+          // Match same loose patterns you used
+          if (strpos($ln, ' '.$player.' ') !== false ||
+              strpos($ln, ' '.$player.', ') !== false ||
+              strncmp($ln, $player.' ', strlen($player)+1) === 0 ||
+              strncmp($ln, $player."'s ", strlen($player)+3) === 0) {
+            $mods[] = trim($ln);
+          }
+        }
+        fclose($mf);
+      }
+      $modsCount = count($mods);
+    ?>
+
+    <?php if ($modsCount): ?>
+      <h2><?php echo $allmods != 1 ? 'Recent ' : ''; ?>Character Modifiers</h2>
+      <p>
+      <?php
+        if ($allmods == 1 || $modsCount < 6) {
+          foreach ($mods as $ln) {
+            echo e($ln)."<br />\n";
+          }
+          echo "<br />\n";
+        } else {
+          // Show last 5 (same as your logic)
+          for ($i = max(0, $modsCount - 5); $i < $modsCount; $i++) {
+            echo e($mods[$i])."<br />\n";
+          }
+        }
+      ?>
       </p>
-<?php
-        }
-    }
-    include("footer.php");
-?>
 
+      <?php if ($allmods != 1 && $modsCount > 5): ?>
+        <p>
+          [<a href="<?php echo $selfUrl; ?>&amp;allmods=1">View all Character Modifiers</a> (<?php echo (int)$modsCount; ?>)]
+        </p>
+      <?php endif; ?>
+    <?php endif; ?>
+
+  <?php endif; ?>
+</section>
+
+<?php include __DIR__.'/_inc/footer.php'; ?>
